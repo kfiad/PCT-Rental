@@ -60,9 +60,9 @@
 
         const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
         
-        // --- Chart instances need to be stored globally to be destroyed on re-render
         let rentStatusChart = null;
         let monthlyIncomeChart = null;
+        let onConfirmCallback = null;
 
         // --- CORE RENDER FUNCTION ---
         function render() {
@@ -98,7 +98,7 @@
                     case 'accounts': content = renderAccounts(activeTenants, months, activeProperty); break;
                     case 'maintenance': content = renderMaintenance(activeMaintenanceRequests, activeTenants); break;
                     case 'settings': content = renderSettings(state.properties); break;
-                    case 'profile': content = renderProfilePage(); break; // NEW PROFILE PAGE
+                    case 'profile': content = renderProfilePage(); break;
                     default: content = `<h2>Page not found</h2>`;
                 }
             }
@@ -110,7 +110,6 @@
                 </main>
             `;
             
-            // If the dashboard is rendered, initialize the charts
             if (state.activeTab === 'dashboard') {
                 renderCharts(activeTenants, months);
             }
@@ -129,8 +128,13 @@
                         </div>
                         <form class="mt-8 space-y-6" data-action="${isLoginView ? 'login' : 'signup'}">
                             <div class="rounded-md shadow-sm -space-y-px">
+                                ${!isLoginView ? `
                                 <div>
-                                    <input id="email-address" name="email" type="email" autocomplete="email" required class="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm" placeholder="Email address">
+                                    <input id="full-name" name="fullName" type="text" required class="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm" placeholder="Full Name">
+                                </div>
+                                ` : ''}
+                                <div>
+                                    <input id="email-address" name="email" type="email" autocomplete="email" required class="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 ${!isLoginView ? '' : 'rounded-t-md'}" placeholder="Email address">
                                 </div>
                                 <div>
                                     <input id="password" name="password" type="password" autocomplete="current-password" required class="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm" placeholder="Password">
@@ -162,7 +166,6 @@
                         <div class="flex items-center gap-4">
                             <h1 class="text-2xl font-bold text-gray-800">${activeProperty ? activeProperty.name : 'Property Manager'}</h1>
                         </div>
-                        <!-- Desktop Navigation -->
                         <nav class="hidden md:flex">
                             ${navItems.map(item => `
                                 <button data-action="navigate" data-tab="${item}" class="px-4 py-2 capitalize ${activeTab === item ? 'text-blue-600 font-semibold' : 'text-gray-600'}">
@@ -170,14 +173,12 @@
                                 </button>
                             `).join('')}
                         </nav>
-                        <!-- Mobile Menu Button -->
                         <div class="md:hidden">
                             <button data-action="toggle-mobile-menu" class="text-gray-600 hover:text-gray-800">
                                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7"></path></svg>
                             </button>
                         </div>
                     </div>
-                    <!-- Mobile Navigation Menu -->
                     <div id="mobile-menu" class="md:hidden fixed top-0 right-0 h-full w-64 bg-white shadow-lg z-50 p-4">
                          <button data-action="toggle-mobile-menu" class="absolute top-4 right-4 text-gray-600 hover:text-gray-800 text-2xl">&times;</button>
                          <nav class="mt-12 flex flex-col space-y-4">
@@ -276,16 +277,8 @@
         }
         
         function renderTenants(allTenants) {
-            const filteredTenants = allTenants.filter(tenant => {
-                const searchTerm = state.tenantSearchTerm.toLowerCase();
-                return tenant.name.toLowerCase().includes(searchTerm) || tenant.unit.toLowerCase().includes(searchTerm);
-            });
-
-            const shops = filteredTenants.filter(t => t.type === 'Shop');
-            const offices = filteredTenants.filter(t => t.type === 'Office');
-            
             const tenantCard = (tenant) => `
-                <div class="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow duration-300 flex flex-col justify-between">
+                <div data-tenant-card-id="${tenant.id}" data-tenant-name="${tenant.name}" data-tenant-unit="${tenant.unit}" class="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow duration-300 flex flex-col justify-between">
                     <div>
                         <h3 class="text-xl font-semibold text-gray-800">${tenant.name}</h3>
                         <p class="text-gray-600">Unit ${tenant.unit}</p>
@@ -300,18 +293,22 @@
                  <div class="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
                     <h2 class="text-3xl font-bold text-gray-800">Tenants</h2>
                     <div class="flex items-center gap-2">
-                        <input type="text" data-action="search-tenants" value="${state.tenantSearchTerm}" placeholder="Search by name or unit..." class="p-2 border rounded-md w-full md:w-auto">
+                        <input type="text" data-action="search-tenants" placeholder="Search by name or unit..." class="p-2 border rounded-md w-full md:w-auto">
                         <button data-action="open-modal" data-modal="add-tenant" class="px-4 py-2 rounded-md font-semibold text-white transition-colors duration-300 text-sm bg-blue-600 hover:bg-blue-700 flex-shrink-0">Add Tenant</button>
                     </div>
                 </div>
                 
                 <div class="mb-8">
                     <h3 class="text-2xl font-semibold text-gray-700 mb-4">Shops</h3>
-                    ${shops.length > 0 ? `<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">${shops.map(tenantCard).join('')}</div>` : `<p class="text-gray-500">No matching shop tenants found.</p>`}
+                    <div id="shops-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        ${allTenants.filter(t => t.type === 'Shop').map(tenantCard).join('') || `<p class="text-gray-500 col-span-full">No shop tenants found.</p>`}
+                    </div>
                 </div>
                 <div>
                     <h3 class="text-2xl font-semibold text-gray-700 mb-4">Offices</h3>
-                     ${offices.length > 0 ? `<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">${offices.map(tenantCard).join('')}</div>` : `<p class="text-gray-500">No matching office tenants found.</p>`}
+                     <div id="offices-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        ${allTenants.filter(t => t.type === 'Office').map(tenantCard).join('') || `<p class="text-gray-500 col-span-full">No office tenants found.</p>`}
+                    </div>
                 </div>
                 ${renderAddTenantModal()}
             `;
@@ -436,7 +433,7 @@
                     <h2 class="text-3xl font-bold text-gray-800">Maintenance Requests</h2>
                     <button data-action="open-modal" data-modal="add-maintenance" class="px-4 py-2 rounded-md font-semibold text-white transition-colors duration-300 text-sm bg-blue-600 hover:bg-blue-700">Add Request</button>
                 </div>
-                <div class="bg-white p-6 rounded-lg shadow-md">
+                <div class="bg-white p-6 rounded-lg shadow-md overflow-x-auto">
                     <table class="w-full text-left">
                         <thead><tr class="border-b"><th class="py-2">Tenant</th><th class="py-2">Unit</th><th class="py-2">Issue</th><th class="py-2">Status</th><th class="py-2">Action</th></tr></thead>
                         <tbody>
@@ -486,19 +483,29 @@
         }
         
         function renderProfilePage() {
+            const userFullName = state.user?.user_metadata?.fullName || 'N/A';
             return `
                  <div class="bg-white p-6 rounded-lg shadow-md max-w-2xl mx-auto">
                     <h2 class="text-3xl font-bold text-gray-800 mb-6">Profile</h2>
                     <div class="mb-8">
                         <h3 class="text-xl font-semibold text-gray-700 mb-4">Account Information</h3>
-                        <p class="text-gray-600">Email: <span class="font-medium text-gray-800">${state.user.email}</span></p>
+                        <p class="text-gray-600 mb-2">Email: <span class="font-medium text-gray-800">${state.user.email}</span></p>
+                        <form data-action="update-profile" class="space-y-4 mt-4">
+                            <div>
+                                <label for="update-full-name" class="block text-sm font-medium text-gray-700">Full Name</label>
+                                <input type="text" name="fullName" id="update-full-name" value="${userFullName}" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                            </div>
+                             <div class="flex justify-end">
+                                <button type="submit" class="px-4 py-2 rounded-md font-semibold text-white transition-colors duration-300 text-sm bg-blue-600 hover:bg-blue-700">Update Name</button>
+                            </div>
+                        </form>
                     </div>
-                    <div>
+                    <div class="border-t pt-6">
                          <h3 class="text-xl font-semibold text-gray-700 mb-4">Update Password</h3>
                          <form data-action="update-password" class="space-y-4">
                             <div>
                                 <label for="new-password" class="block text-sm font-medium text-gray-700">New Password</label>
-                                <input type="password" name="password" id="new-password" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                                <input type="password" name="password" id="new-password" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" placeholder="Enter new password">
                             </div>
                             <div class="flex justify-end">
                                 <button type="submit" class="px-4 py-2 rounded-md font-semibold text-white transition-colors duration-300 text-sm bg-blue-600 hover:bg-blue-700">Update Password</button>
@@ -624,8 +631,16 @@
         
         // --- EVENT HANDLERS & LOGIC ---
         
-        async function handleSignup(email, password) {
-            const { error } = await supabaseClient.auth.signUp({ email, password });
+        async function handleSignup(email, password, fullName) {
+            const { error } = await supabaseClient.auth.signUp({ 
+                email, 
+                password,
+                options: {
+                    data: {
+                        fullName: fullName
+                    }
+                }
+            });
             if (error) showAlert(error.message, 'error');
             else showAlert('Check your email for the confirmation link!', 'success');
         }
@@ -647,6 +662,19 @@
                 showAlert('Error updating password: ' + error.message, 'error');
             } else {
                 showAlert('Password updated successfully!', 'success');
+            }
+        }
+        
+        async function handleUpdateProfile(fullName) {
+             const { data, error } = await supabaseClient.auth.updateUser({
+                data: { fullName: fullName }
+            })
+            if(error) {
+                showAlert('Error updating profile: ' + error.message, 'error');
+            } else {
+                state.user = data.user;
+                showAlert('Profile updated successfully!', 'success');
+                render();
             }
         }
 
@@ -846,11 +874,9 @@
         }
         
         function renderCharts(tenants, months) {
-            // Destroy existing charts to prevent duplicates
             if (rentStatusChart) rentStatusChart.destroy();
             if (monthlyIncomeChart) monthlyIncomeChart.destroy();
 
-            // 1. Rent Status Pie Chart
             const rentStatusCtx = document.getElementById('rentStatusChart');
             if (rentStatusCtx) {
                 const currentMonthIndex = new Date().getMonth();
@@ -861,16 +887,12 @@
                     type: 'pie',
                     data: {
                         labels: ['Paid', 'Due'],
-                        datasets: [{
-                            data: [paid, due],
-                            backgroundColor: ['#10B981', '#EF4444'],
-                        }]
+                        datasets: [{ data: [paid, due], backgroundColor: ['#10B981', '#EF4444'], }]
                     },
                     options: { responsive: true, maintainAspectRatio: false }
                 });
             }
 
-            // 2. Monthly Income Bar Chart
             const monthlyIncomeCtx = document.getElementById('monthlyIncomeChart');
             if (monthlyIncomeCtx) {
                 const incomeData = {};
@@ -887,21 +909,14 @@
                 const today = new Date();
                 const lastSixMonths = Array.from({ length: 6 }, (_, i) => {
                     const monthIndex = (today.getMonth() - i + 12) % 12;
-                    return {
-                        label: months[monthIndex],
-                        income: incomeData[monthIndex]
-                    };
+                    return { label: months[monthIndex], income: incomeData[monthIndex] };
                 }).reverse();
 
                 monthlyIncomeChart = new Chart(monthlyIncomeCtx, {
                     type: 'bar',
                     data: {
                         labels: lastSixMonths.map(d => d.label),
-                        datasets: [{
-                            label: 'Total Income',
-                            data: lastSixMonths.map(d => d.income),
-                            backgroundColor: '#3B82F6',
-                        }]
+                        datasets: [{ label: 'Total Income', data: lastSixMonths.map(d => d.income), backgroundColor: '#3B82F6', }]
                     },
                     options: { responsive: true, maintainAspectRatio: true, scales: { y: { beginAtZero: true } } }
                 });
@@ -920,8 +935,14 @@
                 state.authView = state.authView === 'login' ? 'signup' : 'login';
                 render();
             }
+             if(action === 'toggle-mobile-menu') {
+                document.getElementById('mobile-menu')?.classList.toggle('open');
+            }
             if (action === 'logout') handleLogout();
-            if (action === 'navigate') handleNavigation(target.dataset.tab);
+            if (action === 'navigate') {
+                handleNavigation(target.dataset.tab);
+                 document.getElementById('mobile-menu')?.classList.remove('open');
+            }
             if (action === 'view-tenant') handleViewTenant(Number(target.dataset.tenantId));
             if (action === 'back-to-tenants') { state.selectedTenantId = null; render(); }
             if (action === 'mark-paid') handleMarkAsPaid(Number(target.dataset.tenantId), target.dataset.month);
@@ -962,10 +983,12 @@
              const formData = new FormData(e.target);
              const email = formData.get('email');
              const password = formData.get('password');
+             const fullName = formData.get('fullName');
 
              if (action === 'login') handleLogin(email, password);
-             if (action === 'signup') handleSignup(email, password);
+             if (action === 'signup') handleSignup(email, password, fullName);
              if (action === 'update-password') handleUpdatePassword(password);
+             if (action === 'update-profile') handleUpdateProfile(fullName);
              if (action === 'add-tenant') handleAddTenant(formData);
              if (action === 'edit-tenant') handleEditTenant(formData);
              if (action === 'add-maintenance') handleAddMaintenance(formData);
@@ -973,14 +996,19 @@
         });
 
         document.body.addEventListener('input', (e) => {
-            let target = e.target.closest('[data-action]');
-            if (!target) return;
-            const action = target.dataset.action;
-
-            if (action === 'search-tenants') {
-                state.tenantSearchTerm = e.target.value;
-                render();
-            }
+            const target = e.target.closest('[data-action]');
+            if (!target || target.dataset.action !== 'search-tenants') return;
+            
+            const searchTerm = e.target.value.toLowerCase();
+            document.querySelectorAll('[data-tenant-card-id]').forEach(card => {
+                const name = card.dataset.tenantName.toLowerCase();
+                const unit = card.dataset.tenantUnit.toLowerCase();
+                if (name.includes(searchTerm) || unit.includes(searchTerm)) {
+                    card.style.display = '';
+                } else {
+                    card.style.display = 'none';
+                }
+            });
         });
 
         document.body.addEventListener('change', (e) => {
@@ -1025,7 +1053,7 @@
         
         supabaseClient.auth.onAuthStateChange((event, session) => {
             state.user = session ? session.user : null;
-            state.isLoading = true; // Set loading to true while we fetch new data
+            state.isLoading = true; 
             fetchAllDataForCurrentUser();
         });
     </script>
